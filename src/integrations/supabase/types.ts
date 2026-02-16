@@ -14,7 +14,99 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      job_descriptions: {
+        Row: {
+          created_at: string
+          id: string
+          jd_text: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          jd_text: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          jd_text?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          full_name: string | null
+          github_handle: string | null
+          id: string
+          leetcode_handle: string | null
+          linkedin_url: string | null
+          primary_goal: string | null
+          resume_text: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          full_name?: string | null
+          github_handle?: string | null
+          id?: string
+          leetcode_handle?: string | null
+          linkedin_url?: string | null
+          primary_goal?: string | null
+          resume_text?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          full_name?: string | null
+          github_handle?: string | null
+          id?: string
+          leetcode_handle?: string | null
+          linkedin_url?: string | null
+          primary_goal?: string | null
+          resume_text?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      scans: {
+        Row: {
+          created_at: string
+          id: string
+          percentile: number | null
+          result_json: Json | null
+          score: number | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          percentile?: number | null
+          result_json?: Json | null
+          score?: number | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          percentile?: number | null
+          result_json?: Json | null
+          score?: number | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

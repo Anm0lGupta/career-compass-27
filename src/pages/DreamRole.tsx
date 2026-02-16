@@ -7,6 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Briefcase, Building, Sparkles, Target, CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 const mockDreamResult = {
   readiness: 62,
@@ -18,28 +21,64 @@ const mockDreamResult = {
   ],
   strengths: ["Python", "React", "Docker", "PostgreSQL", "Git"],
   roadmap: [
-    { week: "Week 1-2", task: "Complete System Design primer", difficulty: "Hard" },
-    { week: "Week 3-4", task: "Build distributed key-value store", difficulty: "Hard" },
-    { week: "Week 5-6", task: "Deploy app with Kubernetes", difficulty: "Medium" },
-    { week: "Week 7-8", task: "Build GraphQL API + integration tests", difficulty: "Medium" },
+    { week: "Week 1-2", task: "Complete System Design primer", difficulty: "Hard", time_estimate: "10 hours" },
+    { week: "Week 3-4", task: "Build distributed key-value store", difficulty: "Hard", time_estimate: "12 hours" },
+    { week: "Week 5-6", task: "Deploy app with Kubernetes", difficulty: "Medium", time_estimate: "6 hours" },
+    { week: "Week 7-8", task: "Build GraphQL API + integration tests", difficulty: "Medium", time_estimate: "8 hours" },
   ],
 };
 
 const DreamRole = () => {
+  const { user, isDemo } = useAuth();
   const [role, setRole] = useState("");
   const [company, setCompany] = useState("");
   const [analyzed, setAnalyzed] = useState(false);
   const [loading, setLoading] = useState(false);
-  const r = mockDreamResult;
+  const [result, setResult] = useState<any>(mockDreamResult);
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     if (!role) return;
     setLoading(true);
-    setTimeout(() => {
+
+    if (isDemo) {
+      setResult(mockDreamResult);
       setAnalyzed(true);
       setLoading(false);
-    }, 1200);
+      return;
+    }
+
+    try {
+      // Get user's resume
+      let resumeText = "";
+      if (user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("resume_text")
+          .eq("user_id", user.id)
+          .single();
+        resumeText = (profile as any)?.resume_text || "";
+      }
+
+      if (!resumeText) {
+        toast.error("Please upload your resume first");
+        setLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke("analyze-resume", {
+        body: { resume_text: resumeText, target_role: role, target_company: company, mode: "dream_role" },
+      });
+      if (error) throw error;
+      setResult(data);
+      setAnalyzed(true);
+    } catch (err: any) {
+      toast.error(err.message || "Analysis failed");
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const r = result;
 
   return (
     <div className="container py-6 md:py-8 space-y-6 max-w-2xl mx-auto">
@@ -66,7 +105,6 @@ const DreamRole = () => {
 
       {analyzed && (
         <>
-          {/* Readiness */}
           <Card className="glass-card overflow-hidden">
             <CardContent className="p-6">
               <div className="flex items-center gap-5">
@@ -84,14 +122,13 @@ const DreamRole = () => {
             </CardContent>
           </Card>
 
-          {/* Gaps */}
           <Card className="glass-card">
             <CardContent className="p-5">
               <h3 className="font-display font-semibold mb-3 flex items-center gap-2">
                 <XCircle className="w-4 h-4 text-destructive" /> Critical Gaps
               </h3>
               <div className="space-y-3">
-                {r.gaps.map((g) => (
+                {r.gaps.map((g: any) => (
                   <div key={g.skill} className="flex items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
@@ -108,28 +145,26 @@ const DreamRole = () => {
             </CardContent>
           </Card>
 
-          {/* Strengths */}
           <Card className="glass-card">
             <CardContent className="p-5">
               <h3 className="font-display font-semibold mb-3 flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-success" /> Your Strengths
               </h3>
               <div className="flex flex-wrap gap-2">
-                {r.strengths.map((s) => (
+                {r.strengths.map((s: string) => (
                   <span key={s} className="px-2.5 py-1 rounded-full bg-success/10 text-success text-xs font-medium">{s}</span>
                 ))}
               </div>
             </CardContent>
           </Card>
 
-          {/* Roadmap */}
           <Card className="glass-card">
             <CardContent className="p-5">
               <h3 className="font-display font-semibold mb-3 flex items-center gap-2">
                 <Target className="w-4 h-4 text-primary" /> Priority Roadmap
               </h3>
               <div className="space-y-3">
-                {r.roadmap.map((item, i) => (
+                {r.roadmap.map((item: any, i: number) => (
                   <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-muted/50">
                     <div className="w-6 h-6 rounded-full gradient-primary flex items-center justify-center shrink-0 mt-0.5">
                       <span className="text-[10px] font-bold text-primary-foreground">{i + 1}</span>
@@ -139,6 +174,7 @@ const DreamRole = () => {
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-xs text-muted-foreground">{item.week}</span>
                         <Badge variant="outline" className="text-[10px] rounded-full">{item.difficulty}</Badge>
+                        {item.time_estimate && <span className="text-xs text-muted-foreground">• {item.time_estimate}</span>}
                       </div>
                     </div>
                   </div>

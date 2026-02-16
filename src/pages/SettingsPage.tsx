@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -9,13 +10,59 @@ import { toast } from "sonner";
 
 const SettingsPage = () => {
   const navigate = useNavigate();
+  const { user, isDemo } = useAuth();
 
-  const handleExport = () => {
-    toast.success("Score history exported as CSV!");
+  const handleExport = async () => {
+    if (isDemo || !user) {
+      toast.success("Score history exported as CSV!");
+      return;
+    }
+
+    const { data } = await supabase
+      .from("scans")
+      .select("score, percentile, status, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: true });
+
+    if (!data || data.length === 0) {
+      toast.info("No scan data to export");
+      return;
+    }
+
+    const headers = ["Score", "Percentile", "Status", "Date"];
+    const rows = data.map((s) => [s.score, s.percentile, s.status, s.created_at]);
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "score-history.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Score history exported!");
   };
 
-  const handleDelete = () => {
-    toast("This is a demo — data deletion would happen here.", { description: "GDPR-compliant data removal." });
+  const handleDelete = async () => {
+    if (isDemo || !user) {
+      toast("Demo mode — data deletion disabled.");
+      return;
+    }
+
+    const confirmed = window.confirm("Are you sure you want to delete all your data? This cannot be undone.");
+    if (!confirmed) return;
+
+    await Promise.all([
+      supabase.from("scans").delete().eq("user_id", user.id),
+      supabase.from("job_descriptions").delete().eq("user_id", user.id),
+      supabase.from("profiles").update({
+        resume_text: null,
+        github_handle: null,
+        linkedin_url: null,
+        leetcode_handle: null,
+        primary_goal: null,
+      } as any).eq("user_id", user.id),
+    ]);
+    toast.success("All your data has been deleted.");
   };
 
   const handleLogout = async () => {

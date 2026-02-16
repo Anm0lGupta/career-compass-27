@@ -1,11 +1,28 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Download, Share2, ExternalLink } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
-const mockRoadmap = [
+interface RoadmapItem {
+  id: string;
+  task: string;
+  time: string;
+  difficulty: string;
+  resource: string;
+  done: boolean;
+}
+
+interface RoadmapWeek {
+  week: string;
+  items: RoadmapItem[];
+}
+
+const defaultRoadmap: RoadmapWeek[] = [
   {
     week: "Week 1-2",
     items: [
@@ -37,7 +54,43 @@ const mockRoadmap = [
 ];
 
 const RoadmapPage = () => {
-  const [roadmap, setRoadmap] = useState(mockRoadmap);
+  const { user, isDemo } = useAuth();
+  const [roadmap, setRoadmap] = useState<RoadmapWeek[]>(defaultRoadmap);
+
+  useEffect(() => {
+    // Load roadmap from latest scan if available
+    const loadRoadmap = async () => {
+      if (isDemo || !user) return;
+      const { data } = await supabase
+        .from("scans")
+        .select("result_json")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      const resultJson = data?.result_json as any;
+      if (resultJson?.roadmap) {
+        const aiRoadmap: RoadmapWeek[] = [];
+        const items = resultJson.roadmap;
+        // Group into 2-week blocks
+        for (let i = 0; i < items.length; i += 2) {
+          const weekNum = Math.floor(i / 2) + 1;
+          const weekItems = items.slice(i, i + 2).map((item: any, idx: number) => ({
+            id: `${i + idx}`,
+            task: item.task,
+            time: item.time || item.time_estimate || "TBD",
+            difficulty: item.priority === "high" ? "Hard" : item.priority === "low" ? "Easy" : "Medium",
+            resource: item.resource_url || "#",
+            done: false,
+          }));
+          aiRoadmap.push({ week: `Week ${weekNum * 2 - 1}-${weekNum * 2}`, items: weekItems });
+        }
+        if (aiRoadmap.length > 0) setRoadmap(aiRoadmap);
+      }
+    };
+    loadRoadmap();
+  }, [user, isDemo]);
 
   const toggleItem = (weekIdx: number, itemIdx: number) => {
     setRoadmap((prev) =>
@@ -52,6 +105,26 @@ const RoadmapPage = () => {
   const total = roadmap.flatMap((w) => w.items).length;
   const done = roadmap.flatMap((w) => w.items).filter((i) => i.done).length;
 
+  const exportPDF = () => {
+    // Generate a simple text export
+    const text = roadmap.map((w) =>
+      `${w.week}\n${w.items.map((it) => `  ${it.done ? "✅" : "⬜"} ${it.task} (${it.time}, ${it.difficulty})`).join("\n")}`
+    ).join("\n\n");
+    const blob = new Blob([text], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "roadmap.txt";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Roadmap exported!");
+  };
+
+  const shareLink = () => {
+    navigator.clipboard.writeText(window.location.href);
+    toast.success("Link copied to clipboard!");
+  };
+
   return (
     <div className="container py-6 md:py-8 space-y-6 max-w-2xl mx-auto">
       <div className="flex items-center justify-between">
@@ -60,14 +133,14 @@ const RoadmapPage = () => {
           <p className="text-sm text-muted-foreground">{done}/{total} tasks completed</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="icon" className="rounded-full"><Share2 className="w-4 h-4" /></Button>
-          <Button variant="outline" size="icon" className="rounded-full"><Download className="w-4 h-4" /></Button>
+          <Button variant="outline" size="icon" className="rounded-full" onClick={shareLink}><Share2 className="w-4 h-4" /></Button>
+          <Button variant="outline" size="icon" className="rounded-full" onClick={exportPDF}><Download className="w-4 h-4" /></Button>
         </div>
       </div>
 
       {/* Progress bar */}
       <div className="h-2 bg-muted rounded-full overflow-hidden">
-        <div className="h-full gradient-primary rounded-full transition-all" style={{ width: `${(done / total) * 100}%` }} />
+        <div className="h-full gradient-primary rounded-full transition-all" style={{ width: `${total > 0 ? (done / total) * 100 : 0}%` }} />
       </div>
 
       {roadmap.map((week, wi) => (
@@ -91,9 +164,11 @@ const RoadmapPage = () => {
                       <Badge variant={item.difficulty === "Hard" ? "destructive" : item.difficulty === "Medium" ? "default" : "secondary"} className="text-[10px] rounded-full px-2 py-0">
                         {item.difficulty}
                       </Badge>
-                      <a href={item.resource} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-0.5 hover:underline">
-                        Resource <ExternalLink className="w-2.5 h-2.5" />
-                      </a>
+                      {item.resource !== "#" && (
+                        <a href={item.resource} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-0.5 hover:underline">
+                          Resource <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      )}
                     </div>
                   </div>
                 </CardContent>

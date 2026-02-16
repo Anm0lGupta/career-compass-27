@@ -1,15 +1,16 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
-/** Guest demo mode — simply redirects to dashboard with mock data */
+/** Guest demo mode — sets demo flag and redirects to dashboard with mock data */
 const DemoPage = () => {
   const navigate = useNavigate();
+  const { setIsDemo } = useAuth();
 
   useEffect(() => {
-    // In the future, this could set a demo flag in context/store
-    // For now, dashboard always shows mock data
+    setIsDemo(true);
     navigate("/dashboard", { replace: true });
-  }, [navigate]);
+  }, [navigate, setIsDemo]);
 
   return null;
 };

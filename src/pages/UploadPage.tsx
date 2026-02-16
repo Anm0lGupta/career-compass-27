@@ -8,11 +8,14 @@ import { Label } from "@/components/ui/label";
 import { Upload, FileText, Github, Linkedin, Code, ArrowRight, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 const steps = ["Upload Resume", "Connect Profiles", "Set Goals"];
 
 const UploadPage = () => {
   const navigate = useNavigate();
+  const { user, isDemo } = useAuth();
   const [step, setStep] = useState(0);
   const [resumeText, setResumeText] = useState("");
   const [github, setGithub] = useState("");
@@ -33,11 +36,51 @@ const UploadPage = () => {
       return;
     }
     setLoading(true);
-    // TODO: wire up to edge function
-    setTimeout(() => {
+
+    try {
+      // Save profile data
+      if (user) {
+        await supabase.from("profiles").update({
+          resume_text: resumeText,
+          github_handle: github || null,
+          linkedin_url: linkedin || null,
+          leetcode_handle: leetcode || null,
+          primary_goal: goal,
+        } as any).eq("user_id", user.id);
+      }
+
+      if (isDemo) {
+        toast.success("Resume analyzed! Redirecting to dashboard...");
+        navigate("/dashboard");
+        return;
+      }
+
+      // Call AI edge function
+      const { data, error } = await supabase.functions.invoke("analyze-resume", {
+        body: { resume_text: resumeText, goal, mode: "score" },
+      });
+
+      if (error) throw error;
+
+      // Save scan
+      if (user) {
+        await supabase.from("scans").insert({
+          user_id: user.id,
+          score: data.final_score,
+          percentile: data.percentile_rank,
+          result_json: data,
+          status: "completed",
+        } as any);
+      }
+
       toast.success("Resume analyzed! Redirecting to dashboard...");
       navigate("/dashboard");
-    }, 1500);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Analysis failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

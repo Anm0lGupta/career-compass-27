@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { LayoutDashboard, Upload, Map, User, Sparkles, LogOut, Briefcase, Settings } from "lucide-react";
+import { LayoutDashboard, Upload, Map, User, Sparkles, LogOut, Briefcase, Settings, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -57,6 +57,18 @@ const AppLayout = () => {
           >
             <Briefcase className="w-4 h-4" />
             Dream Role
+          </Link>
+          <Link
+            to="/recruiter"
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors",
+              location.pathname === "/recruiter"
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+            )}
+          >
+            <Users className="w-4 h-4" />
+            Recruiter
           </Link>
         </nav>
         <div className="flex items-center gap-2">

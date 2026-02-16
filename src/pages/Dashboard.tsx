@@ -1,22 +1,19 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ArrowRight, Upload, Target, TrendingUp, Layers, Clock } from "lucide-react";
+import { ArrowRight, Upload, Target, TrendingUp, Layers, Clock, Shield, AlertTriangle } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
-// Mock data for demo
 const mockScore = {
   final_score: 74,
   percentile_rank: 81.4,
   percentile_label: "Top 25%",
   confidence_label: "HIGH",
-  breakdown: {
-    lexical_score: 62,
-    semantic_score: 71,
-    project_depth: 80,
-    experience_score: 60,
-  },
+  breakdown: { lexical_score: 62, semantic_score: 71, project_depth: 80, experience_score: 60 },
   matched_skills: ["Python", "React", "Docker", "PostgreSQL", "Git"],
   missing_skills: ["Kubernetes", "GraphQL", "CI/CD", "TypeScript"],
   best_fit_roles: [
@@ -28,6 +25,10 @@ const mockScore = {
     { task: "Complete Kubernetes basics course", time: "2 weeks", priority: "high" },
     { task: "Build a GraphQL API project", time: "1 week", priority: "medium" },
     { task: "Add CI/CD to existing project", time: "3 days", priority: "medium" },
+  ],
+  integrity_flags: [
+    { label: "No repetition detected", status: "pass" },
+    { label: "Original content", status: "pass" },
   ],
 };
 
@@ -46,7 +47,44 @@ const metricLabels: Record<string, string> = {
 };
 
 const Dashboard = () => {
-  const s = mockScore;
+  const { user, isDemo } = useAuth();
+  const [scoreData, setScoreData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchLatestScan = async () => {
+      if (isDemo || !user) {
+        setScoreData(mockScore);
+        setLoading(false);
+        return;
+      }
+      const { data } = await supabase
+        .from("scans")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (data?.result_json) {
+        setScoreData(data.result_json);
+      } else {
+        setScoreData(mockScore);
+      }
+      setLoading(false);
+    };
+    fetchLatestScan();
+  }, [user, isDemo]);
+
+  if (loading) {
+    return (
+      <div className="container py-12 text-center">
+        <p className="text-muted-foreground">Loading your dashboard...</p>
+      </div>
+    );
+  }
+
+  const s = scoreData;
 
   return (
     <div className="container py-6 md:py-8 space-y-6">
@@ -91,8 +129,8 @@ const Dashboard = () => {
                   <Icon className="w-4 h-4 text-primary" />
                   <span className="text-xs text-muted-foreground">{metricLabels[key]}</span>
                 </div>
-                <p className="font-display text-2xl font-bold">{value}</p>
-                <Progress value={value} className="mt-2 h-1.5" />
+                <p className="font-display text-2xl font-bold">{value as number}</p>
+                <Progress value={value as number} className="mt-2 h-1.5" />
               </CardContent>
             </Card>
           );
@@ -107,7 +145,7 @@ const Dashboard = () => {
             <div>
               <p className="text-xs text-muted-foreground mb-2">Matched</p>
               <div className="flex flex-wrap gap-2">
-                {s.matched_skills.map((sk) => (
+                {s.matched_skills.map((sk: string) => (
                   <span key={sk} className="px-2.5 py-1 rounded-full bg-success/10 text-success text-xs font-medium">{sk}</span>
                 ))}
               </div>
@@ -115,7 +153,7 @@ const Dashboard = () => {
             <div>
               <p className="text-xs text-muted-foreground mb-2">Missing</p>
               <div className="flex flex-wrap gap-2">
-                {s.missing_skills.map((sk) => (
+                {s.missing_skills.map((sk: string) => (
                   <span key={sk} className="px-2.5 py-1 rounded-full bg-warning/10 text-warning text-xs font-medium">{sk}</span>
                 ))}
               </div>
@@ -124,11 +162,28 @@ const Dashboard = () => {
         </CardContent>
       </Card>
 
+      {/* Integrity Flags */}
+      {s.integrity_flags && s.integrity_flags.length > 0 && (
+        <Card className="glass-card">
+          <CardContent className="p-5">
+            <h3 className="font-display font-semibold mb-3">Integrity Check</h3>
+            <div className="flex flex-wrap gap-2">
+              {s.integrity_flags.map((f: any) => (
+                <Badge key={f.label} variant="outline" className={`rounded-full text-xs ${f.status === "pass" ? "border-success/30 text-success" : "border-destructive/30 text-destructive"}`}>
+                  {f.status === "pass" ? <Shield className="w-3 h-3 mr-1" /> : <AlertTriangle className="w-3 h-3 mr-1" />}
+                  {f.label}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Role Fit */}
       <div>
         <h3 className="font-display font-semibold mb-3">Best Fit Roles</h3>
         <div className="flex gap-3 overflow-x-auto pb-2 snap-x">
-          {s.best_fit_roles.map((r) => (
+          {s.best_fit_roles.map((r: any) => (
             <Card key={r.role} className="glass-card min-w-[220px] snap-start shrink-0">
               <CardContent className="p-4">
                 <p className="font-display font-semibold text-sm">{r.role}</p>
@@ -153,7 +208,7 @@ const Dashboard = () => {
             </Link>
           </div>
           <div className="space-y-3">
-            {s.roadmap.map((r, i) => (
+            {s.roadmap.map((r: any, i: number) => (
               <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-muted/50">
                 <div className="w-6 h-6 rounded-full gradient-primary flex items-center justify-center shrink-0 mt-0.5">
                   <span className="text-[10px] font-bold text-primary-foreground">{i + 1}</span>
